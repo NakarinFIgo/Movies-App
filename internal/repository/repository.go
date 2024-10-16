@@ -16,6 +16,44 @@ type PostgresRepository struct {
 
 const dbTimeout = time.Second * 5
 
+func (m *PostgresRepository) GetUserByEmail(email string) (*entities.User, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var user entities.User
+
+	err := m.DB.WithContext(ctx).Where("email = ?", email).First(&user).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (m *PostgresRepository) GetUserByID(id int) (*entities.User, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var user entities.User
+
+	err := m.DB.WithContext(ctx).Where("id = ?", id).First(&user).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 func (m *PostgresRepository) AllMovies() ([]*entities.Movie, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -81,40 +119,79 @@ func (m *PostgresRepository) OneMovieForEdit(id int) (*entities.Movie, []*entiti
 	return &movie, allGenres, nil
 }
 
-func (m *PostgresRepository) GetUserByEmail(email string) (*entities.User, error) {
-
+func (m *PostgresRepository) AllGenres() ([]*entities.Genre, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	var user entities.User
+	var genre []*entities.Genre
 
-	err := m.DB.WithContext(ctx).Where("email = ?", email).First(&user).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("user not found")
-		}
-		return nil, err
+	result := m.DB.WithContext(ctx).Order("genre").Find(&genre)
+	if result.Error != nil {
+		return nil, result.Error
 	}
-
-	return &user, nil
+	return genre, nil
 }
 
-func (m *PostgresRepository) GetUserByID(id int) (*entities.User, error) {
+func (m *PostgresRepository) InsertMovie(movie entities.Movie) (int, error) {
+	if err := m.DB.Create(&movie).Error; err != nil {
+		return 0, err
+	}
+	return int(movie.ID), nil
+}
 
+func (m *PostgresRepository) UpdateMovie(movie entities.Movie) error {
+	if err := m.DB.Model(&movie).Where("id = ?", movie.ID).Updates(entities.Movie{
+		Title:       movie.Title,
+		Description: movie.Description,
+		ReleaseDate: movie.ReleaseDate,
+		RunTime:     movie.RunTime,
+		MPAARating:  movie.MPAARating,
+		UpdatedAt:   movie.UpdatedAt,
+		Image:       movie.Image,
+	}).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *PostgresRepository) UpdateMovieGenres(id int, genreIDs []int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	var user entities.User
+	var movie entities.Movie
+	if err := m.DB.WithContext(ctx).Begin().First(&movie, id); err != nil {
+		m.DB.WithContext(ctx).Begin().Rollback()
 
-	err := m.DB.WithContext(ctx).Where("id = ?", id).First(&user).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("user not found")
-		}
-		return nil, err
 	}
 
-	return &user, nil
+	var genres []*entities.Genre
+	if err := m.DB.WithContext(ctx).Begin().Where("id IN ?", genreIDs).Find(&genres).Error; err != nil {
+		m.DB.WithContext(ctx).Begin().Rollback()
+		return err
+	}
+
+	if err := m.DB.WithContext(ctx).Begin().Model(&movie).Association("Genres").Replace(genres); err != nil {
+		m.DB.WithContext(ctx).Begin().Rollback()
+		return err
+	}
+
+	return nil
+}
+
+func (m *PostgresRepository) DeleteMovie(id int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var movie entities.Movie
+	result := m.DB.WithContext(ctx).First(&movie, id)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	result = m.DB.WithContext(ctx).Delete(&movie)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	return nil
 }

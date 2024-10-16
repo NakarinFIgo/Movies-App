@@ -1,9 +1,15 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/NakarinFIgo/Movies-App/configs"
 	"github.com/NakarinFIgo/Movies-App/internal/entities"
@@ -19,58 +25,6 @@ type Handler struct {
 
 type Claims struct {
 	jwt.RegisteredClaims
-}
-
-func (h *Handler) AllMovies(c *fiber.Ctx) error {
-
-	if h.App.DB == nil {
-		return utils.ErrorJSON(c, fiber.NewError(fiber.StatusInternalServerError, "database connection is not initialized"))
-	}
-
-	movies, err := h.App.DB.AllMovies()
-	if err != nil {
-		return utils.ErrorJSON(c, err)
-	}
-
-	return utils.WriteJSON(c, fiber.StatusOK, movies)
-}
-
-func (h *Handler) GetMovie(c *fiber.Ctx) error {
-	id := c.Params("id") // ใช้ c.Params เพื่อดึงค่า id จาก URL
-	movieID, err := strconv.Atoi(id)
-	if err != nil {
-		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
-	}
-
-	movie, err := h.App.DB.OneMovie(movieID)
-	if err != nil {
-		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
-	}
-
-	return utils.WriteJSON(c, fiber.StatusOK, movie) // ส่งข้อมูลหนังกลับไป
-}
-
-func (h *Handler) MovieForEdit(c *fiber.Ctx) error {
-	id := c.Params("id") // ใช้ c.Params เพื่อดึงค่า id จาก URL
-	movieID, err := strconv.Atoi(id)
-	if err != nil {
-		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
-	}
-
-	movie, genres, err := h.App.DB.OneMovieForEdit(movieID)
-	if err != nil {
-		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
-	}
-
-	payload := struct {
-		Movie  *entities.Movie   `json:"movie"`
-		Genres []*entities.Genre `json:"genres"`
-	}{
-		movie,
-		genres,
-	}
-
-	return utils.WriteJSON(c, http.StatusOK, payload) // ส่งข้อมูลหนังและประเภทหนังกลับไป
 }
 
 func (h *Handler) Authentication(c *fiber.Ctx) error {
@@ -166,4 +120,222 @@ func (h *Handler) Logout(c *fiber.Ctx) error {
 	expiredCookie := h.App.Auth.GetExpiredRefreshCookie()
 	c.Cookie(expiredCookie)
 	return c.SendStatus(fiber.StatusAccepted)
+}
+
+func (h *Handler) AllMovies(c *fiber.Ctx) error {
+
+	if h.App.DB == nil {
+		return utils.ErrorJSON(c, fiber.NewError(fiber.StatusInternalServerError, "database connection is not initialized"))
+	}
+
+	movies, err := h.App.DB.AllMovies()
+	if err != nil {
+		return utils.ErrorJSON(c, err)
+	}
+
+	return utils.WriteJSON(c, fiber.StatusOK, movies)
+}
+
+func (h *Handler) GetMovie(c *fiber.Ctx) error {
+	id := c.Params("id") // ใช้ c.Params เพื่อดึงค่า id จาก URL
+	movieID, err := strconv.Atoi(id)
+	if err != nil {
+		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
+	}
+
+	movie, err := h.App.DB.OneMovie(movieID)
+	if err != nil {
+		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
+	}
+
+	return utils.WriteJSON(c, fiber.StatusOK, movie) // ส่งข้อมูลหนังกลับไป
+}
+
+func (h *Handler) MovieForEdit(c *fiber.Ctx) error {
+	id := c.Params("id") // ใช้ c.Params เพื่อดึงค่า id จาก URL
+	movieID, err := strconv.Atoi(id)
+	if err != nil {
+		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
+	}
+
+	movie, genres, err := h.App.DB.OneMovieForEdit(movieID)
+	if err != nil {
+		return utils.ErrorJSON(c, err) // คืนค่าข้อผิดพลาด
+	}
+
+	payload := struct {
+		Movie  *entities.Movie   `json:"movie"`
+		Genres []*entities.Genre `json:"genres"`
+	}{
+		movie,
+		genres,
+	}
+
+	return utils.WriteJSON(c, http.StatusOK, payload) // ส่งข้อมูลหนังและประเภทหนังกลับไป
+}
+
+func (h *Handler) MovieCatalog(c *fiber.Ctx) error {
+	movies, err := h.App.DB.AllMovies()
+	if err != nil {
+		return utils.ErrorJSON(c, err)
+	}
+
+	return utils.WriteJSON(c, fiber.StatusOK, movies)
+}
+func (h *Handler) AllGenres(c *fiber.Ctx) error {
+	genres, err := h.App.DB.AllGenres()
+	if err != nil {
+		return utils.ErrorJSON(c, err)
+	}
+
+	_ = utils.WriteJSON(c, fiber.StatusOK, genres)
+
+	return nil
+}
+
+func (h *Handler) GetPoster(movie entities.Movie) entities.Movie {
+	type TheMovieDB struct {
+		Page    int `json:"page"`
+		Results []struct {
+			PosterPath string `json:"poster_path"`
+		} `json:"results"`
+		TotalPages int `json:"total_pages"`
+	}
+
+	theUrl := fmt.Sprintf("https://api.themoviedb.org/3/search/movie?api_key=%s", h.App.APIKey)
+	queryUrl := theUrl + "&query=" + url.QueryEscape(movie.Title)
+
+	req, err := http.NewRequest("GET", queryUrl, nil)
+	if err != nil {
+		log.Println(err)
+		return movie
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println(err)
+		return movie
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return movie
+	}
+
+	var responseObject TheMovieDB
+	if err := json.Unmarshal(bodyBytes, &responseObject); err != nil {
+		log.Println(err)
+		return movie
+	}
+
+	if len(responseObject.Results) > 0 {
+		movie.Image = responseObject.Results[0].PosterPath
+	}
+
+	return movie
+}
+
+func (h *Handler) InsertMovie(c *fiber.Ctx) error {
+	var movie entities.Movie
+
+	err := utils.ReadJSON(c, &movie)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	movie = h.GetPoster(movie)
+
+	movie.CreatedAt = time.Now()
+	movie.UpdatedAt = time.Now()
+
+	newID, err := h.App.DB.InsertMovie(movie)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	err = h.App.DB.UpdateMovieGenres(newID, movie.GenresArray)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	err = h.App.DB.UpdateMovieGenres(newID, movie.GenresArray)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	resp := utils.JSONResponse{
+		Error:   false,
+		Message: "movie updated",
+	}
+
+	utils.WriteJSON(c, fiber.StatusAccepted, resp)
+
+	return nil
+}
+
+func (h *Handler) UpdateMovie(c *fiber.Ctx) error {
+	var payload entities.Movie
+
+	err := utils.ReadJSON(c, &payload)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	movie, err := h.App.DB.OneMovie(payload.ID)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	movie.Title = payload.Title
+	movie.ReleaseDate = payload.ReleaseDate
+	movie.Description = payload.Description
+	movie.MPAARating = payload.MPAARating
+	movie.RunTime = payload.RunTime
+	movie.UpdatedAt = time.Now()
+
+	err = h.App.DB.UpdateMovie(*movie)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	err = h.App.DB.UpdateMovieGenres(movie.ID, payload.GenresArray)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	resp := utils.JSONResponse{
+		Error:   false,
+		Message: "movie updated",
+	}
+
+	utils.WriteJSON(c, fiber.StatusAccepted, resp)
+
+	return nil
+}
+
+func (h *Handler) DeleteMovie(c *fiber.Ctx) error {
+	id := c.Params("id")
+	movieID, err := strconv.Atoi(id)
+	if err != nil {
+		return utils.ErrorJSON(c, err)
+	}
+
+	err = h.App.DB.DeleteMovie(movieID)
+	if err != nil {
+		return utils.ErrorJSON(c, err)
+	}
+
+	resp := utils.JSONResponse{
+		Error:   false,
+		Message: "movie deleted",
+	}
+
+	utils.WriteJSON(c, http.StatusAccepted, resp)
+
+	return nil
 }

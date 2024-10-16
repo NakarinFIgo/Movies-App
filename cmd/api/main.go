@@ -1,8 +1,8 @@
 package main
 
 import (
-	"flag"
 	"log"
+	"os"
 	"time"
 
 	"github.com/NakarinFIgo/Movies-App/configs"
@@ -11,22 +11,24 @@ import (
 	"github.com/NakarinFIgo/Movies-App/pkg/db"
 	"github.com/NakarinFIgo/Movies-App/pkg/middlewares"
 	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
 )
 
 func main() {
 
 	var cfx configs.Application
 
-	flag.StringVar(&cfx.DSN, "dsn", "host=localhost port=5432 dbname=gosampledb user=postgres password=123456 sslmode=disable timezone=UTC connect_timeout=5", "Postgres connection string")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
-	flag.StringVar(&cfx.JWTSecret, "jwt-secret", "verysecret", "signing secret")
-	flag.StringVar(&cfx.JWTIssuer, "jwt-issuer", "example.com", "signing issuer")
-	flag.StringVar(&cfx.JWTAudience, "jwt-audience", "example.com", "signing audience")
-	flag.StringVar(&cfx.CookieDomain, "cookie-domain", "localhost", "cookie domain")
-	flag.StringVar(&cfx.Domain, "domain", "example.com", "domain")
-	flag.StringVar(&cfx.APIKey, "api-key", "b41447e6319d1cd467306735632ba733", "api key")
-
-	flag.Parse()
+	cfx.JWTSecret = os.Getenv("JWT_SECRET")
+	cfx.JWTIssuer = os.Getenv("JWT_ISSUER")
+	cfx.JWTAudience = os.Getenv("JWT_AUDIENCE")
+	cfx.CookieDomain = os.Getenv("COOKIE_DOMAIN")
+	cfx.Domain = os.Getenv("DOMAIN")
+	cfx.APIKey = os.Getenv("API_KEY")
 
 	databaseRepo := db.DBConnection()
 	if databaseRepo == nil {
@@ -58,15 +60,23 @@ func main() {
 	app.Post("/authenticate", h.Authentication)
 	app.Get("/refresh", h.RefreshToken)
 	app.Get("/logout", h.Logout)
+
 	app.Get("/movies", h.AllMovies)
 	app.Get("/movies/:id", h.GetMovie)
+	app.Get("genres", h.AllGenres)
 
 	app.Route("/admin", func(router fiber.Router) {
 		router.Use(h.App.Auth.AuthRequired())
+
+		router.Get("/movies", h.MovieCatalog)
 		router.Get("/movies/:id", h.MovieForEdit)
+		router.Post("/movies", h.InsertMovie)
+		router.Put("/movies/:id", h.UpdateMovie)
+		router.Delete("/movies/:id", h.DeleteMovie)
+
 	})
 
-	err := app.Listen(":8080")
+	err = app.Listen(":8080")
 	if err != nil {
 		log.Fatal(err)
 	}
