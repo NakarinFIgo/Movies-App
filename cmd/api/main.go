@@ -6,14 +6,34 @@ import (
 	"time"
 
 	"github.com/NakarinFIgo/Movies-App/configs"
+	_ "github.com/NakarinFIgo/Movies-App/docs"
 	"github.com/NakarinFIgo/Movies-App/internal/handler"
 	"github.com/NakarinFIgo/Movies-App/internal/repository"
 	"github.com/NakarinFIgo/Movies-App/pkg/db"
 	"github.com/NakarinFIgo/Movies-App/pkg/middlewares"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/swagger"
 	"github.com/joho/godotenv"
 )
 
+// @title Movies API with GO and PostgreSQL
+// @version 1.0
+// @description This is a Movies API with GO and PostgreSQL
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 
 	var cfx configs.Application
@@ -56,24 +76,26 @@ func main() {
 	}
 
 	app.Use(middlewares.Enablecors())
+	app.Get("/swagger/*", swagger.HandlerDefault)
 
-	app.Post("/authenticate", h.Authentication)
-	app.Get("/refresh", h.RefreshToken)
-	app.Get("/logout", h.Logout)
+	// API Routes
+	app.Route("/api/v1", func(router fiber.Router) {
+		router.Post("/authenticate", h.Authentication)
+		router.Get("/refresh", h.RefreshToken)
+		router.Get("/logout", h.Logout)
 
-	app.Get("/movies", h.AllMovies)
-	app.Get("/movies/:id", h.GetMovie)
-	app.Get("genres", h.AllGenres)
+		router.Get("/movies", h.AllMovies)
+		router.Get("/movies/:id", h.GetMovie)
+		router.Get("/genres", h.AllGenres)
 
-	app.Route("/admin", func(router fiber.Router) {
-		router.Use(h.App.Auth.AuthRequired())
-
-		router.Get("/movies", h.MovieCatalog)
-		router.Get("/movies/:id", h.MovieForEdit)
-		router.Post("/movies", h.InsertMovie)
-		router.Put("/movies/:id", h.UpdateMovie)
-		router.Delete("/movies/:id", h.DeleteMovie)
-
+		// Admin routes with JWT middleware
+		admin := router.Group("/admin")
+		admin.Use(middlewares.JwtMiddleware())
+		admin.Get("/movies", h.MovieCatalog)
+		admin.Get("/movies/:id", h.MovieForEdit)
+		admin.Post("/movies", h.InsertMovie)
+		admin.Put("/movies/:id", h.UpdateMovie)
+		admin.Delete("/movies/:id", h.DeleteMovie)
 	})
 
 	err = app.Listen(":8080")

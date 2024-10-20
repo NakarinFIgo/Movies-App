@@ -3,10 +3,10 @@ package entities
 import "time"
 
 type Movie struct {
-	ID          int       `json:"id"`
+	ID          int       `json:"id" gorm:"primaryKey"`
 	Title       string    `json:"title"`
 	ReleaseDate time.Time `json:"release_date"`
-	RunTime     int       `json:"runtime"`
+	RunTime     int       `json:"runtime" gorm:"column:runtime"`
 	MPAARating  string    `json:"mpaa_rating"`
 	Description string    `json:"description"`
 	Image       string    `json:"image"`
@@ -17,9 +17,9 @@ type Movie struct {
 }
 
 type Genre struct {
-	ID        int       `json:"id"`
-	Genre     string    `json:"genre"`
-	Checked   bool      `json:"checked"`
+	ID    int    `json:"id"`
+	Genre string `json:"genre"`
+	//Checked   bool      `json:"checked" gorm:"default:false"`
 	CreatedAt time.Time `json:"-"`
 	UpdatedAt time.Time `json:"-"`
 }

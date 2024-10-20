@@ -133,10 +133,14 @@ func (m *PostgresRepository) AllGenres() ([]*entities.Genre, error) {
 }
 
 func (m *PostgresRepository) InsertMovie(movie entities.Movie) (int, error) {
-	if err := m.DB.Create(&movie).Error; err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if err := m.DB.WithContext(ctx).Create(&movie).Error; err != nil {
 		return 0, err
 	}
-	return int(movie.ID), nil
+	return movie.ID, nil
+
 }
 
 func (m *PostgresRepository) UpdateMovie(movie entities.Movie) error {
