@@ -75,6 +75,36 @@ func (h *Handler) Authentication(c *fiber.Ctx) error {
 	c.Cookie(refreshCookie)
 
 	utils.WriteJSON(c, fiber.StatusOK, tokens)
+
+	// create the response payload (สร้าง payload สำหรับ response)
+	responsePayload := struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		User         struct {
+			ID        int    `json:"id"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+			Email     string `json:"email"`
+		} `json:"user"`
+	}{
+		AccessToken:  tokens.Token, // แก้ไขให้ตรงกับฟิลด์ Token ของคุณ
+		RefreshToken: tokens.RefreshToken,
+		User: struct {
+			ID        int    `json:"id"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+			Email     string `json:"email"`
+		}{
+			ID:        user.ID,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Email:     user.Email,
+		},
+	}
+
+	// write the response as JSON (เขียน response เป็น JSON)
+	utils.WriteJSON(c, http.StatusAccepted, responsePayload)
+
 	return nil
 }
 
