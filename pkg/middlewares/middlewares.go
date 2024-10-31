@@ -16,7 +16,7 @@ func Enablecors() fiber.Handler {
 		AllowOrigins:     "http://localhost:5173",
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-		AllowHeaders:     "Origin, Content-Type, Accept",
+		AllowHeaders:     "Origin,Authorization, Content-Type, Accept",
 	})
 }
 func JwtMiddleware() fiber.Handler {

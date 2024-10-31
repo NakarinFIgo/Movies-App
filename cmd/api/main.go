@@ -80,8 +80,9 @@ func main() {
 
 	// API Routes
 	app.Route("/api/v1", func(router fiber.Router) {
-		router.Post("/authenticate", h.Authentication)
+		router.Post("/login", h.Login)
 		router.Get("/refresh", h.RefreshToken)
+		router.Get("/register", h.Register)
 		router.Get("/logout", h.Logout)
 
 		router.Get("/movies", h.AllMovies)

@@ -1,4 +1,41 @@
 basePath: /
+definitions:
+  handler.UserLoginPayload:
+    properties:
+      email:
+        description: |-
+          Required: true
+          Example: "
+        type: string
+      password:
+        description: |-
+          Required: true
+          Example: "password123"
+        type: string
+    type: object
+  handler.UserRegisterPayload:
+    properties:
+      email:
+        description: |-
+          Required: true
+          Example: "john@example.com"
+        type: string
+      first_name:
+        description: |-
+          Required: true
+          Example: "John"
+        type: string
+      last_name:
+        description: |-
+          Required: true
+          Example: "Doe"
+        type: string
+      password:
+        description: |-
+          Required: true
+          Example: "password123"
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -170,7 +207,28 @@ paths:
       summary: แก้ไขข้อมูลหนัง
       tags:
       - Movies
-  /api/v1/authenticate:
+  /api/v1/genres:
+    get:
+      description: ดึงข้อมูลประเภทหนังทั้งหมด
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of all genres" example([{"id":1,"name":"Action"},{"id":2,"name":"Drama"}])
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error" example({"error":"Internal Server Error"})
+          schema:
+            additionalProperties: true
+            type: object
+      summary: แสดงประเภทหนังทั้งหมด
+      tags:
+      - Genres
+  /api/v1/login:
     post:
       consumes:
       - application/json
@@ -182,7 +240,7 @@ paths:
         name: requestPayload
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/handler.UserLoginPayload'
       produces:
       - application/json
       responses:
@@ -206,27 +264,6 @@ paths:
       summary: Authentication และสร้าง TokenPairs
       tags:
       - Authentication
-  /api/v1/genres:
-    get:
-      description: ดึงข้อมูลประเภทหนังทั้งหมด
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of all genres" example([{"id":1,"name":"Action"},{"id":2,"name":"Drama"}])
-          schema:
-            items:
-              additionalProperties: true
-              type: object
-            type: array
-        "500":
-          description: Internal Server Error" example({"error":"Internal Server Error"})
-          schema:
-            additionalProperties: true
-            type: object
-      summary: แสดงประเภทหนังทั้งหมด
-      tags:
-      - Genres
   /api/v1/logout:
     get:
       description: ลบโทเคนรีเฟรชของผู้ใช้ออกจากระบบ
@@ -329,6 +366,43 @@ paths:
               type: string
             type: object
       summary: รีเฟรชโทเคน JWT
+      tags:
+      - Authentication
+  /api/v1/register:
+    post:
+      consumes:
+      - application/json
+      description: รับข้อมูลผู้ใช้ใหม่และบันทึกลงในระบบ
+      parameters:
+      - description: User registration data
+        in: body
+        name: requestPayload
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UserRegisterPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 'message" example({"message": "User created"})'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 'Bad Request" example({"error": "Bad Request"})'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'Internal Server Error" example({"error": "Internal Server
+            Error"})'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: เพิ่มผู้ใช้ใหม่
       tags:
       - Authentication
 securityDefinitions:

@@ -5,6 +5,7 @@ import "github.com/NakarinFIgo/Movies-App/internal/entities"
 type DatabaseRepo interface {
 	GetUserByEmail(email string) (*entities.User, error)
 	GetUserByID(id int) (*entities.User, error)
+	InsertUser(user entities.User) (int, error)
 	AllMovies() ([]*entities.Movie, error)
 	AllGenres() ([]*entities.Genre, error)
 	InsertMovie(movie entities.Movie) (int, error)

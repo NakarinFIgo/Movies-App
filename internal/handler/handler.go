@@ -17,33 +17,59 @@ import (
 	"github.com/NakarinFIgo/Movies-App/pkg/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Handler struct {
 	App configs.Application
 }
 
+// UserRegisterPayload is the request payload for user login
+// swagger:parameters login
+type UserLoginPayload struct {
+	// Required: true
+	// Example: "
+	Email string `json:"email"`
+	// Required: true
+	// Example: "password123"
+	Password string `json:"password"`
+}
+
+// UserRegisterPayload is the request payload for user registration
+// swagger:parameters register
+type UserRegisterPayload struct {
+	// Required: true
+	// Example: "John"
+	FirstName string `json:"first_name"`
+	// Required: true
+	// Example: "Doe"
+	LastName string `json:"last_name"`
+	// Required: true
+	// Example: "john@example.com"
+	Email string `json:"email"`
+	// Required: true
+	// Example: "password123"
+	Password string `json:"password"`
+}
+
 type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// authenticate ทำการ Authentication และสร้าง TokenPairs
+// login ทำการ login และสร้าง TokenPairs
 // @Summary Authentication และสร้าง TokenPairs
 // @Description รับข้อมูลอีเมลและรหัสผ่านของผู้ใช้และตรวจสอบความถูกต้อง หลังจากนั้นสร้าง JWT TokenPairs
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Param requestPayload body object true "User credentials" example({"email": "string", "password": "string"})
+// @Param requestPayload body UserLoginPayload true "User credentials" example({"email": "string", "password": "string"})
 // @Success 202 {object} map[string]interface{} "Token pairs" example({"access_token": "string", "refresh_token": "string"})
 // @Failure 400 {object} map[string]interface{} "Bad Request" example({"error": "Bad Request"})
 // @Failure 500 {object} map[string]interface{} "Internal Server Error" example({"error": "Internal Server Error"})
-// @Router /api/v1/authenticate [post]
-func (h *Handler) Authentication(c *fiber.Ctx) error {
+// @Router /api/v1/login [post]
+func (h *Handler) Login(c *fiber.Ctx) error {
 
-	var requestPayload struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var requestPayload UserLoginPayload
 
 	err := utils.ReadJSON(c, &requestPayload)
 	if err != nil {
@@ -104,6 +130,63 @@ func (h *Handler) Authentication(c *fiber.Ctx) error {
 
 	// write the response as JSON (เขียน response เป็น JSON)
 	utils.WriteJSON(c, http.StatusAccepted, responsePayload)
+
+	return nil
+}
+
+// register เพิ่มผู้ใช้ใหม่ในระบบ
+// @Summary เพิ่มผู้ใช้ใหม่
+// @Description รับข้อมูลผู้ใช้ใหม่และบันทึกลงในระบบ
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param requestPayload body UserRegisterPayload true "User registration data" example({"first_name": "John", "last_name": "Doe", "email": "john@example.com", "password": "password123"})
+// @Success 201 {object} map[string]string "message" example({"message": "User created"})
+// @Failure 400 {object} map[string]string "Bad Request" example({"error": "Bad Request"})
+// @Failure 500 {object} map[string]string "Internal Server Error" example({"error": "Internal Server Error"})
+// @Router /api/v1/register [post]
+func (h *Handler) Register(c *fiber.Ctx) error {
+	var requestPayload UserRegisterPayload
+
+	err := utils.ReadJSON(c, &requestPayload)
+	if err != nil {
+		utils.ErrorJSON(c, err, http.StatusBadRequest)
+
+	}
+
+	// ตรวจสอบว่าอีเมลนี้มีอยู่แล้วในระบบหรือไม่
+	existingUser, _ := h.App.DB.GetUserByEmail(requestPayload.Email)
+	if existingUser != nil {
+		utils.ErrorJSON(c, errors.New("email already exists"), http.StatusBadRequest)
+
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(requestPayload.Password), bcrypt.DefaultCost)
+	if err != nil {
+		utils.ErrorJSON(c, err)
+	}
+
+	// Create new user
+	user := entities.User{
+		FirstName: requestPayload.FirstName,
+		LastName:  requestPayload.LastName,
+		Email:     requestPayload.Email,
+		Password:  string(hashedPassword),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Insert user to database
+	if _, err := h.App.DB.InsertUser(user); err != nil {
+		return utils.ErrorJSON(c, err)
+	}
+	resp := utils.JSONResponse{
+		Error:   false,
+		Message: "User created",
+	}
+
+	utils.WriteJSON(c, fiber.StatusAccepted, resp)
 
 	return nil
 }

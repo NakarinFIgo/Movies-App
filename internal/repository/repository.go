@@ -68,6 +68,16 @@ func (m *PostgresRepository) AllMovies() ([]*entities.Movie, error) {
 	return movies, nil
 }
 
+func (m *PostgresRepository) InsertUser(user entities.User) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if err := m.DB.WithContext(ctx).Create(&user).Error; err != nil {
+		return 0, err
+	}
+	return user.ID, nil
+}
+
 func (m *PostgresRepository) OneMovie(id int) (*entities.Movie, error) {
 	var movie entities.Movie
 
@@ -140,7 +150,6 @@ func (m *PostgresRepository) InsertMovie(movie entities.Movie) (int, error) {
 		return 0, err
 	}
 	return movie.ID, nil
-
 }
 
 func (m *PostgresRepository) UpdateMovie(movie entities.Movie) error {
